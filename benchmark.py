@@ -1,30 +1,37 @@
-import requests
 import time
+import requests
 import statistics
 
-BASE_URL = "http://localhost:8000"
-NUM_REQUESTS = 50
+BASE_URL = "http://127.0.0.1:8000"
 
-test_query = {"query": "concurrent socket cache benchmarking", "top_k": 3}
-latencies = []
-
-print(f"Starting benchmark: {NUM_REQUESTS} requests...")
-
-for i in range(NUM_REQUESTS):
+def run_benchmark():
+    query_payload = {"query": "deep learning neural networks", "top_k": 2}
+    
+    # 1. Warm-up / Cache Miss Request
     start = time.perf_counter()
-    response = requests.post(f"{BASE_URL}/search", json=test_query)
-    elapsed = (time.perf_counter() - start) * 1000
+    r = requests.post(f"{BASE_URL}/search", json=query_payload)
+    miss_latency = (time.perf_counter() - start) * 1000
+    miss_data = r.json()
+    
+    print(f"Cold Request (Cache Miss): {miss_latency:.2f} ms | Internal Engine Latency: {miss_data.get('latency_ms', 0):.2f} ms")
+    
+    # 2. 50 Repeated Warm Requests (Cache Hits)
+    latencies = []
+    engine_latencies = []
+    
+    for _ in range(50):
+        t0 = time.perf_counter()
+        res = requests.post(f"{BASE_URL}/search", json=query_payload)
+        t1 = time.perf_counter()
+        latencies.append((t1 - t0) * 1000)
+        engine_latencies.append(res.json().get("latency_ms", 0))
 
-    if response.status_code == 200:
-        latencies.append(elapsed)
-    else:
-        print(f"Request {i} failed with status {response.status_code}")
+    print("\n--- Cache Hit Benchmark (50 Requests) ---")
+    print(f"Engine Internal Latency (P50):  {statistics.median(engine_latencies):.3f} ms")
+    print(f"Engine Internal Latency (Min):  {min(engine_latencies):.3f} ms")
+    print(f"End-to-End HTTP Latency (P50):  {statistics.median(latencies):.2f} ms")
+    print(f"End-to-End HTTP Latency (Min):  {min(latencies):.2f} ms")
+    print(f"Speedup Factor:                 {miss_data.get('latency_ms', 1) / max(statistics.median(engine_latencies), 0.001):.1f}x")
 
-print("\n--- Benchmark Results ---")
-print(f"Completed Requests: {len(latencies)}/{NUM_REQUESTS}")
-if latencies:
-    print(f"Min Latency:       {min(latencies):.2f} ms")
-    print(f"Mean Latency:      {statistics.mean(latencies):.2f} ms")
-    print(f"P50 (Median):      {statistics.median(latencies):.2f} ms")
-    print(f"P95 Latency:      {statistics.quantiles(latencies, n=20)[18]:.2f} ms")
-    print(f"Max Latency:      {max(latencies):.2f} ms")
+if __name__ == "__main__":
+    run_benchmark()
