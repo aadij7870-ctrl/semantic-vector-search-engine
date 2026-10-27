@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*$py.class
+vector_store.pkl
+.env
+venv/
+.pytest_cache/
